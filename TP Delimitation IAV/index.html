@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1"> 
+    <title>Carte avec Historique</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /> 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> 
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
+    <script src="https://unpkg.com/leaflet.filelayer/dist/leaflet.filelayer.js"></script>
+
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 70px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+        }
+        #header {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            z-index: 1000;
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            font-weight: bold;
+        }
+        #search {
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            margin-right: 10px;
+        }
+        #search input {
+            padding: 10px;
+            font-size: 16px;
+            width: 250px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #search button {
+            padding: 10px;
+            font-size: 16px;
+            border: none;
+            background-color: blue;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        #search button.clicked {
+            background-color: rgb(241, 252, 20);
+        }
+        #previous-button, #next-button {
+            width: 40px;
+            height: 40px;
+            background-color: blue;
+            color: white;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin-left: 10px;
+            transition: background-color 0.3s ease;
+        }
+        #previous-button.clicked, #next-button.clicked {
+            background-color: rgb(233, 244, 17);
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="controls">
+    <div id="search">
+        <input type="text" id="search-input" placeholder="Rechercher une localisation" />
+        <button id="search-button"><i class="fas fa-search"></i></button>
+    </div>
+    <button id="previous-button">&#8592;</button>
+    <button id="next-button">&#8594;</button>
+</div>
+<div id="header">TP : delimitation de l'IAV réalisé par Oumayma Baddour N: 11 et Soukaina Aradda N: 9</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const map = L.map('map').setView([33.97656774053395, -6.866705997141444], 13);
+
+        const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+
+        let marker = L.marker([33.97656774053395, -6.866705997141444]).addTo(map)
+            .bindPopup('<div class="popup-content" style="text-align: center;"><strong>Ma localisation</strong><br />Institut Agronomique et Veterinaire Hassan II.</div>').openPopup();
+
+        // Polygone délimitant l'IAV
+        const polygon = L.polygon([
+            [33.98155991803469, -6.863976717470877],
+            [33.97789445997476, -6.867562324164936],
+            [33.97452562951548, -6.870644973712217],
+            [33.9734753197839, -6.870740559744718],
+            [33.97282134679244, -6.8705015946638355],
+            [33.97078012601773, -6.867466738132407],
+            [33.976229878078726, -6.8622334028546845],
+            [33.97658657694291, -6.862472367936363],
+            [33.97969772025063, -6.859533097437492],
+            [33.97983643099512, -6.859031270767332],
+            [33.9802921932766, -6.85862503012973],
+            [33.98051016567777, -6.8589834777514795],
+            [33.98084703101701, -6.8628069190498024],
+            [33.98155991803469, -6.863976717470877] 
+        ], {
+            color: 'red',
+            fillColor: 'transparent',
+            fillOpacity: 0.25,
+        }).addTo(map).bindPopup('<div class="popup-content">Délimitation de IAV</div>');
+
+        // Cercle délimitant l'IAV
+        const circle = L.circle([33.97656774053395, -6.866705997141444], {
+            color: 'blue', 
+            fillOpacity: 0.1, 
+            radius: 900 
+        }).addTo(map).bindPopup('<div class="popup-content">Cercle definissant la localisation</div>');
+
+        let locationHistory = []; 
+        let futureHistory = []; 
+        let currentLocation = [33.97656774053395, -6.866705997141444]; 
+
+        const geocoder = L.Control.Geocoder.nominatim();
+        document.getElementById('search-button').onclick = function() {
+            const query = document.getElementById('search-input').value;
+            geocoder.geocode(query, function(results) {
+                if (results && results.length > 0) {
+                    const latLng = results[0].center;
+
+                    if (currentLocation) {
+                        locationHistory.push(currentLocation); 
+                    }
+
+                    currentLocation = latLng;
+                    map.setView(latLng, 13);
+
+                    if (marker) {
+                        map.removeLayer(marker);
+                    }
+                    marker = L.marker(latLng).addTo(map)
+                        .bindPopup(`<div class="popup-content" style="text-align: center;">${results[0].name}</div>`).openPopup();
+
+                    futureHistory = [];
+
+                    const searchButton = document.getElementById('search-button');
+                    searchButton.classList.add('clicked');
+                    setTimeout(() => {
+                        searchButton.classList.remove('clicked');
+                    }, 500); 
+                } else {
+                    alert("Aucune localisation trouvée.");
+                }
+            });
+        };
+
+        document.getElementById('previous-button').onclick = function() {
+            if (locationHistory.length > 0) {
+                const previousLocation = locationHistory.pop(); 
+                futureHistory.push(currentLocation); 
+                currentLocation = previousLocation;
+
+                map.setView(previousLocation, 13);
+
+                if (marker) {
+                    map.removeLayer(marker);
+                }
+                marker = L.marker(previousLocation).addTo(map)
+                    .bindPopup('<div class="popup-content" style="text-align: center;">Localisation précédente</div>').openPopup();
+
+                const previousButton = document.getElementById('previous-button');
+                previousButton.classList.add('clicked');
+                setTimeout(() => {
+                    previousButton.classList.remove('clicked');
+                }, 500); 
+            } else {
+                alert("Pas de localisation précédente.");
+                const previousButton = document.getElementById('previous-button');
+                previousButton.classList.add('clicked');
+                setTimeout(() => {
+                    previousButton.classList.remove('clicked');
+                }, 500); 
+            }
+        };
+
+document.getElementById('next-button').onclick = function() {
+    if (futureHistory.length > 0) {
+        const nextLocation = futureHistory.pop(); 
+        locationHistory.push(currentLocation); 
+        currentLocation = nextLocation;
+
+        map.setView(nextLocation, 13);
+
+        if (marker) {
+            map.removeLayer(marker);
+        }
+        marker = L.marker(nextLocation).addTo(map)
+            .bindPopup('<div class="popup-content" style="text-align: center;">Localisation suivante</div>').openPopup();
+
+        const nextButton = document.getElementById('next-button');
+        nextButton.classList.add('clicked');
+        setTimeout(() => {
+            nextButton.classList.remove('clicked');
+        }, 500); 
+    } else {
+        alert("Pas de localisation suivante.");
+        const nextButton = document.getElementById('next-button');
+        nextButton.classList.add('clicked');
+        setTimeout(() => {
+            nextButton.classList.remove('clicked');
+        }, 500); 
+    }
+};
+
+const drawnItems = new L.FeatureGroup();
+map.addLayer(drawnItems);
+
+const drawControl = new L.Control.Draw({
+    edit: {
+        featureGroup: drawnItems
+    },
+    draw: {
+        polygon: {
+            shapeOptions: {
+                color: 'green',
+            },
+            showArea: true,
+        },
+        polyline: {
+            shapeOptions: {
+                color: 'orange',
+            },
+        },
+        rectangle: {
+            shapeOptions: {
+                color: 'purple',
+            },
+        },
+        circle: false 
+    }
+});
+map.addControl(drawControl);
+
+map.on(L.Draw.Event.CREATED, function (event) {
+    const layer = event.layer;
+    drawnItems.addLayer(layer);
+    if (event.layerType === 'polygon' || event.layerType === 'rectangle') {
+        const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+        const areaPopup = `<div class="popup-content">Surface: ${area.toFixed(2)} m²</div>`;
+        layer.bindPopup(areaPopup).openPopup();
+    } else if (event.layerType === 'polyline') {
+        const distance = Math.round(layer.getLatLngs().reduce((a, b, i) => {
+            return a + (i === 0 ? 0 : layer.getLatLngs()[i - 1].distanceTo(b));
+        }, 0));
+        const distancePopup = `<div class="popup-content">Distance: ${distance} m</div>`;
+        layer.bindPopup(distancePopup).openPopup();
+    }
+});
+
+
+map.on('popupclose', function(e) {
+    if (e.popup) {
+        e.popup._closeButton.style.display = 'none'; 
+    }
+});
+});
+</script>
+</body>
+</html>
